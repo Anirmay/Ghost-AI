@@ -1,0 +1,12 @@
+{
+    "api_key": "",
+    "hotkey": "ctrl+shift+s",
+    "opacity": 0.9,
+    "theme": "neon_blue",
+    "font_size": 12,
+    "width": 450,
+    "height": 400,
+    "x": 105,
+    "y": 320,
+    "click_through": true
+}

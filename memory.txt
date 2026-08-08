@@ -1,0 +1,11 @@
+# =========================================================
+# GHOSTAI PRIVATE MEMORY / KNOWLEDGE BASE
+# =========================================================
+# Write down any data you want GhostAI to remember.
+# You can write bullet points, facts, or paste documents.
+# The AI assistant will always read this memory file to answer questions correctly.
+# 
+# Examples:
+- My name is John Doe.
+- My main email is j.doe@example.com
+- I am currently working on a stealth screen overlay project called GhostAI.

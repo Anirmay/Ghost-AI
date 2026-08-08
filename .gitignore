@@ -1,0 +1,22 @@
+# Python / Virtual Environment
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build artifacts
+build/
+dist/
+*.manifest
+*.spec.bak
+
+# User Config / Local Data (Prevent API Key Leak)
+# Note: config.json template is included with empty api_key
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
