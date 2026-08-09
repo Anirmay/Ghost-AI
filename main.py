@@ -40,7 +40,10 @@ class AIImageWorker(QThread):
         self.prompt = prompt
 
     def run(self):
-        answer = self.client.ask_image(self.image_bytes, self.prompt)
+        try:
+            answer = self.client.ask_image(self.image_bytes, self.prompt)
+        except Exception as e:
+            answer = f"❌ **Vision AI Error:**\n\n{str(e)}"
         self.finished.emit(answer)
 
 
@@ -97,6 +100,7 @@ class GhostApp(QObject):
         from core.snipper import ScreenSnipperOverlay
         self.snipper_overlay = ScreenSnipperOverlay()
         self.snipper_overlay.snippet_captured.connect(self.on_snippet_captured)
+        self.snipper_overlay.cancelled.connect(self.on_snip_cancelled)
 
         # Connect settings & overlay signals
         self.settings_dialog.config_updated.connect(self.on_config_updated)
@@ -122,6 +126,7 @@ class GhostApp(QObject):
         self.ai_worker = None
         self.autopilot_ai_worker = None
         self._interview_ai_workers = []   # LIST — prevents GC of running workers
+        self._image_ai_workers = []       # LIST — prevents GC of running vision workers
         self._interview_active = False
         
         # 3. System Tray configuration
@@ -451,16 +456,36 @@ class GhostApp(QObject):
         self.overlay.set_status("📸 Drag rectangle to snip screen area...", "#00ffcc")
         self.snipper_overlay.start_snipping()
 
+    def on_snip_cancelled(self):
+        """Re-activates GhostOverlay if screen snipping is cancelled with Escape."""
+        self.overlay.show()
+        self.overlay.raise_()
+        self.overlay.activateWindow()
+        self.overlay.set_status("Snipping cancelled", "#ffaa00")
+
     def on_snippet_captured(self, img_bytes: bytes):
         """Triggered when a screen region snippet selection is completed."""
+        # Restore and bring GhostOverlay to front immediately
+        self.overlay.show()
+        self.overlay.raise_()
+        self.overlay.activateWindow()
+
         if not img_bytes:
+            self.overlay.set_status("Snipping cancelled", "#ffaa00")
             return
 
         self.overlay.add_chat_message("user", "📸 *[Screen Snippet Captured]*")
         self.overlay.set_status("Analyzing Image Snippet...", "#00ffcc")
-        self.image_ai_worker = AIImageWorker(self.ai_client, img_bytes)
-        self.image_ai_worker.finished.connect(self.on_ai_answered)
-        self.image_ai_worker.start()
+        
+        worker = AIImageWorker(self.ai_client, img_bytes)
+        self._image_ai_workers.append(worker)
+        worker.finished.connect(self.on_ai_answered)
+        worker.finished.connect(lambda: self._cleanup_image_worker(worker))
+        worker.start()
+
+    def _cleanup_image_worker(self, worker):
+        if worker in self._image_ai_workers:
+            self._image_ai_workers.remove(worker)
 
     def clear_assistant(self):
         """Wipes current overlay text and rolling history."""
