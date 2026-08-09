@@ -1,13 +1,15 @@
 import io
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont
+from PyQt6.QtGui import QPainter
 
 class ScreenSnipperOverlay(QtWidgets.QWidget):
     """
-    Full-screen semi-transparent overlay widget that allows the user to click & drag
-    a glowing selection box over any screen area (diagram, code snippet, math formula).
-    Emits snippet_captured(bytes) when mouse button is released.
+    100% Stealth Screen Region Snipper.
+    - No screen dimming / dark tint
+    - Mouse cursor stays as standard ArrowCursor (no plus/crosshair)
+    - No selection rectangle outline or animation
+    Runs completely invisibly in the background. Emits snippet_captured(bytes) on mouse release.
     """
     snippet_captured = pyqtSignal(bytes)
     cancelled = pyqtSignal()
@@ -20,7 +22,7 @@ class ScreenSnipperOverlay(QtWidgets.QWidget):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setCursor(QtGui.QCursor(Qt.CursorShape.CrossCursor))
+        self.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
         
         self.start_point = QPoint()
         self.current_point = QPoint()
@@ -28,12 +30,13 @@ class ScreenSnipperOverlay(QtWidgets.QWidget):
         self.screen_pixmap = None
 
     def start_snipping(self):
-        """Captures primary screen and opens the interactive snipper canvas."""
+        """Captures primary screen and opens the invisible stealth snipper canvas."""
         screen = QtWidgets.QApplication.primaryScreen()
         if not screen:
+            self.cancelled.emit()
             return
         
-        # Grab whole screen screenshot
+        # Grab whole screen screenshot at the moment snipping starts
         self.screen_pixmap = screen.grabWindow(0)
         self.setGeometry(screen.geometry())
         self.start_point = QPoint()
@@ -47,12 +50,10 @@ class ScreenSnipperOverlay(QtWidgets.QWidget):
             self.start_point = event.pos()
             self.current_point = event.pos()
             self.is_selecting = True
-            self.update()
 
     def mouseMoveEvent(self, event):
         if self.is_selecting:
             self.current_point = event.pos()
-            self.update()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.is_selecting:
@@ -71,6 +72,10 @@ class ScreenSnipperOverlay(QtWidgets.QWidget):
                     buffer.close()
                     if img_bytes:
                         self.snippet_captured.emit(img_bytes)
+                    else:
+                        self.cancelled.emit()
+                else:
+                    self.cancelled.emit()
             else:
                 self.cancelled.emit()
 
@@ -82,38 +87,7 @@ class ScreenSnipperOverlay(QtWidgets.QWidget):
             super().keyPressEvent(event)
 
     def paintEvent(self, event):
+        # 100% Invisible stealth rendering — draws captured screen background seamlessly
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # Draw full screen background screenshot
         if self.screen_pixmap:
             painter.drawPixmap(0, 0, self.screen_pixmap)
-
-        # Dim tint over whole screen
-        dim_color = QColor(0, 0, 0, 140)
-        painter.fillRect(self.rect(), dim_color)
-
-        if self.is_selecting and not self.start_point.isNull():
-            rect = QRect(self.start_point, self.current_point).normalized()
-            
-            # Clear dark tint inside selection rectangle so image shines through bright & clear
-            if self.screen_pixmap:
-                painter.drawPixmap(rect, self.screen_pixmap, rect)
-
-            # Draw glowing cyan selection border
-            pen = QPen(QColor(0, 240, 255, 255), 2, Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            painter.drawRect(rect)
-
-            # Draw dimension dimensions tag box
-            dim_text = f" {rect.width()} × {rect.height()} px "
-            font = QFont("Consolas", 10, QFont.Weight.Bold)
-            painter.setFont(font)
-            fm = painter.fontMetrics()
-            tw = fm.horizontalAdvance(dim_text)
-            th = fm.height()
-
-            tag_rect = QRect(rect.left(), max(0, rect.top() - th - 6), tw + 8, th + 4)
-            painter.fillRect(tag_rect, QColor(0, 240, 255, 220))
-            painter.setPen(QColor(0, 0, 0))
-            painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, dim_text)
