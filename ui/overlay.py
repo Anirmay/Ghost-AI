@@ -221,14 +221,22 @@ class ElegantSizeGrip(QSizeGrip):
 
 class ClickToCopyTextBrowser(QTextBrowser):
     """
-    Custom QTextBrowser that automatically copies clicked or highlighted text to the clipboard.
+    Custom QTextBrowser that automatically copies clicked or highlighted text to the clipboard
+    when click_to_copy_enabled is True.
     - Single click: Copies the line/paragraph/block under the cursor.
     - Drag selection: Copies the highlighted text snippet.
     """
     copied_signal = pyqtSignal(str)
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.click_to_copy_enabled = False
+
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
+        if not getattr(self, "click_to_copy_enabled", False):
+            return
+
         if event.button() == Qt.MouseButton.LeftButton:
             cursor = self.textCursor()
             copied_text = ""
@@ -288,6 +296,7 @@ class GhostOverlay(QWidget):
         self.move(self.config.get("x", 100), self.config.get("y", 100))
         self.setWindowOpacity(self.config.get("opacity", 0.9))
         self.set_click_through(self.config.get("click_through", False))
+        self.set_click_copy(self.config.get("click_copy", False))
 
     def init_ui(self):
         # Base container widget to allow rounded border styling
@@ -333,6 +342,15 @@ class GhostOverlay(QWidget):
         self.autopilot_btn.clicked.connect(self.toggle_autopilot_requested)
         header_layout.addWidget(self.autopilot_btn)
         
+        # 📋 Click-to-Copy Toggle Button
+        self.click_copy_btn = QPushButton("📋", self)
+        self.click_copy_btn.setFixedSize(24, 24)
+        self.click_copy_btn.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.click_copy_btn.setObjectName("click_copy_btn")
+        self.click_copy_btn.setToolTip("Toggle Click-to-Copy Feature")
+        self.click_copy_btn.clicked.connect(self.toggle_click_copy)
+        header_layout.addWidget(self.click_copy_btn)
+
         # Click-Through Toggle Button
         self.lock_btn = QPushButton("🔓", self)
         self.lock_btn.setFixedSize(24, 24)
@@ -577,6 +595,30 @@ class GhostOverlay(QWidget):
             "STEALTH: Interactive" if not self.config.get("click_through", False) else "STEALTH: Click-through ACTIVE", 
             "#00ffcc"
         ))
+
+    def set_click_copy(self, active: bool):
+        """Toggles the click-to-copy feature on or off."""
+        self.config["click_copy"] = active
+        save_config(self.config)
+        if hasattr(self, "text_browser"):
+            self.text_browser.click_to_copy_enabled = active
+
+        if hasattr(self, "click_copy_btn"):
+            if active:
+                self.click_copy_btn.setStyleSheet(
+                    "color: #00ffcc; font-weight: bold; "
+                    "background-color: rgba(0, 240, 255, 0.25); "
+                    "border: 1px solid #00f0ff; border-radius: 4px;"
+                )
+                self.set_status("📋 CLICK-TO-COPY: ON", "#00ffcc")
+            else:
+                self.click_copy_btn.setStyleSheet("")
+                self.set_status("📋 CLICK-TO-COPY: OFF", "#94a3b8")
+
+    def toggle_click_copy(self):
+        """Toggles click-to-copy state."""
+        current = self.config.get("click_copy", False)
+        self.set_click_copy(not current)
 
     def set_click_through(self, active: bool):
         """Toggles the window click-through state (WA_TransparentForMouseEvents)."""
