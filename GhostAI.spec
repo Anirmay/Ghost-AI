@@ -33,6 +33,9 @@ hidden_imports = [
     'google.api_core',
     'grpc',
     'grpc._cython.cygrpc',
+    'uiautomation',
+    'pynput',
+    'comtypes',
 ]
 
 # Exclude every large package that GhostAI does NOT need

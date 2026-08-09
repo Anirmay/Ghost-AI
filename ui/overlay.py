@@ -12,6 +12,7 @@ from PyQt6.QtGui import QPainter, QColor, QRadialGradient, QBrush, QPen
 
 from core.capture_guard import protect_window
 from core.config import load_config, save_config
+from core.click_copy import GlobalClickCopyWorker
 
 # Windows native global hotkey API bindings
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -583,32 +584,42 @@ class GhostOverlay(QWidget):
         self.status_label.setStyleSheet(f"color: {color_hex}; font-family: 'Consolas', monospace; font-size: 11px;")
 
     def on_text_copied(self, copied_text: str):
-        """Displays a brief status notification when text is clicked & copied to clipboard."""
+        """Displays a brief status notification when text is clicked & copied from any webpage or box to clipboard."""
         preview = copied_text[:28] + "..." if len(copied_text) > 28 else copied_text
         self.set_status(f"📋 Copied: \"{preview}\"", "#00ffcc")
         QTimer.singleShot(2500, lambda: self.set_status(
-            "STEALTH: Interactive" if not self.config.get("click_through", False) else "STEALTH: Click-through ACTIVE", 
+            "📋 GLOBAL CLICK-COPY: ON" if self.config.get("click_copy", False) else ("STEALTH: Interactive" if not self.config.get("click_through", False) else "STEALTH: Click-through ACTIVE"), 
             "#00ffcc"
         ))
 
     def set_click_copy(self, active: bool):
-        """Toggles the click-to-copy feature on or off."""
+        """Toggles the global background click-to-copy feature on or off."""
         self.config["click_copy"] = active
         save_config(self.config)
         if hasattr(self, "text_browser"):
             self.text_browser.click_to_copy_enabled = active
 
-        if hasattr(self, "click_copy_btn"):
-            if active:
+        if active:
+            if not getattr(self, "global_copy_worker", None):
+                hwnd = int(self.winId()) if self.winId() else None
+                self.global_copy_worker = GlobalClickCopyWorker(overlay_hwnd=hwnd)
+                self.global_copy_worker.text_copied.connect(self.on_text_copied)
+            self.global_copy_worker.start_listening()
+
+            if hasattr(self, "click_copy_btn"):
                 self.click_copy_btn.setStyleSheet(
                     "color: #00ffcc; font-weight: bold; "
                     "background-color: rgba(0, 240, 255, 0.25); "
                     "border: 1px solid #00f0ff; border-radius: 4px;"
                 )
-                self.set_status("📋 CLICK-TO-COPY: ON", "#00ffcc")
-            else:
+                self.set_status("📋 GLOBAL CLICK-COPY: ON", "#00ffcc")
+        else:
+            if getattr(self, "global_copy_worker", None):
+                self.global_copy_worker.stop_listening()
+
+            if hasattr(self, "click_copy_btn"):
                 self.click_copy_btn.setStyleSheet("")
-                self.set_status("📋 CLICK-TO-COPY: OFF", "#94a3b8")
+                self.set_status("📋 GLOBAL CLICK-COPY: OFF", "#94a3b8")
 
     def toggle_click_copy(self):
         """Toggles click-to-copy state."""
