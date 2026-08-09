@@ -310,7 +310,6 @@ class GhostOverlay(QWidget):
         self.click_copy_btn.setFixedSize(24, 24)
         self.click_copy_btn.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
         self.click_copy_btn.setObjectName("click_copy_btn")
-        self.click_copy_btn.setToolTip("Toggle Click-to-Copy Feature")
         self.click_copy_btn.clicked.connect(self.toggle_click_copy)
         header_layout.addWidget(self.click_copy_btn)
 
@@ -355,6 +354,8 @@ class GhostOverlay(QWidget):
         self.text_browser = QTextBrowser(self)
         self.text_browser.setObjectName("text_browser")
         self.text_browser.setOpenExternalLinks(True)
+        self.text_browser.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.text_browser.viewport().setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
         self.text_browser.setHtml(
             "<div style='color: #888899; text-align: center; margin-top: 50px;'>"
             "🚀 <b>GhostAI Stealthed Copilot</b><br><br>"
@@ -381,6 +382,7 @@ class GhostOverlay(QWidget):
         self.input_field.setObjectName("input_field")
         self.input_field.setPlaceholderText("Type a message and press Enter...")
         self.input_field.setFixedHeight(36)
+        self.input_field.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
         self.input_field.returnPressed.connect(self.on_input_submitted)
         footer_layout.addWidget(self.input_field)
         
