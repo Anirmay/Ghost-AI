@@ -221,10 +221,9 @@ class ElegantSizeGrip(QSizeGrip):
 
 class ClickToCopyTextBrowser(QTextBrowser):
     """
-    Custom QTextBrowser that automatically copies clicked or highlighted text to the clipboard
-    when click_to_copy_enabled is True.
-    - Single click: Copies the line/paragraph/block under the cursor.
+    Custom QTextBrowser that automatically copies text to the clipboard when click_to_copy_enabled is True.
     - Drag selection: Copies the highlighted text snippet.
+    - Single click: Copies the WHOLE answer box text so it can be pasted anywhere cleanly.
     """
     copied_signal = pyqtSignal(str)
 
@@ -244,14 +243,10 @@ class ClickToCopyTextBrowser(QTextBrowser):
             if cursor.hasSelection():
                 copied_text = cursor.selectedText().strip()
             else:
-                # Select the text block/line under mouse click position
-                click_cursor = self.cursorForPosition(event.pos())
-                block_text = click_cursor.block().text().strip()
-                if block_text:
-                    copied_text = block_text
-                else:
-                    click_cursor.select(QtGui.QTextCursor.SelectionType.WordUnderCursor)
-                    copied_text = click_cursor.selectedText().strip()
+                # Copy the WHOLE answer box plain text
+                full_text = self.toPlainText().strip()
+                if full_text:
+                    copied_text = full_text
 
             if copied_text:
                 cb = QtWidgets.QApplication.clipboard()
