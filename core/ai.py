@@ -265,9 +265,39 @@ class GeminiClient:
         """Clears the conversational chat history."""
         self.history = []
 
+    def _get_sanitized_history_contents(self, current_question: str) -> list[dict]:
+        """
+        Builds a strictly valid, alternating user <-> model conversation history payload
+        for the Gemini API, maintaining full multi-turn conversation memory.
+        """
+        contents = []
+        expected_role = "user"
+
+        for role, text in self.history:
+            if not text or not text.strip():
+                continue
+            gemini_role = "user" if role == "user" else "model"
+            if gemini_role == expected_role:
+                contents.append({
+                    "role": gemini_role,
+                    "parts": [{"text": text.strip()}]
+                })
+                expected_role = "model" if gemini_role == "user" else "user"
+
+        # If history ended on a user role without a model turn, pop it to maintain valid structure
+        if contents and contents[-1]["role"] == "user":
+            contents.pop()
+
+        # Append the new user question
+        contents.append({
+            "role": "user",
+            "parts": [{"text": current_question.strip()}]
+        })
+        return contents
+
     def ask(self, question: str) -> str:
         """
-        Sends the question to Gemini API with full local memory.
+        Sends the question to Gemini API with full local memory and rolling chat history.
         Intercepts memory storage commands (e.g. 'remember that...').
         """
         # 1. Check for memory storage trigger commands
@@ -304,30 +334,23 @@ class GeminiClient:
 
         memory_content = load_memory()
         
-        # 3. Construct System Prompt / Core Rules
+        # 3. Construct System Prompt with Multi-Turn Conversation Rules
         system_instruction = (
-            "You are a helpful, fast, and direct AI assistant.\n"
-            "CRITICAL INSTRUCTION: Provide ONLY the direct final answer to the user's input. DO NOT output any internal thoughts, reasoning steps, planning, persona analysis, rule breakdown, or preamble.\n"
-            "Keep answers clear, accurate, and concise. Format code in markdown code blocks with the correct language.\n\n"
-            "Below is the user's private local knowledge base (reference if relevant):\n"
+            "You are GhostAI, an ultra-fast, intelligent, and highly contextual assistant.\n"
+            "CRITICAL MULTI-TURN CONVERSATION INSTRUCTIONS:\n"
+            "- You maintain full conversation history with the user.\n"
+            "- Pay careful attention to all previous user questions, requests, and your previous answers in the conversation thread.\n"
+            "- If the user asks to correct, revise, explain, fix, or build upon a previous answer or question (e.g. 'correct the previous answer', 'rewrite that', 'fix question 1'), refer directly to the conversation history above and provide the updated/corrected final answer.\n"
+            "- Provide ONLY the direct final answer. DO NOT output any internal thoughts, reasoning steps, or rule breakdowns.\n"
+            "- Keep answers clear, accurate, and concise. Format code in markdown code blocks with the correct language.\n\n"
+            "Below is the user's private local knowledge base:\n"
             "--------------------------------------------------\n"
             f"{memory_content}\n"
             "--------------------------------------------------\n"
         )
 
-        # 4. Prepare message history list for API
-        contents = []
-        for role, text in self.history:
-            contents.append({
-                "role": "user" if role == "user" else "model",
-                "parts": [{"text": text}]
-            })
-            
-        # Append the new user question
-        contents.append({
-            "role": "user",
-            "parts": [{"text": question}]
-        })
+        # 4. Prepare sanitized alternating message history list for API
+        contents = self._get_sanitized_history_contents(question)
 
         # 5. Execute Gemini request using the official client.
         available_models = self._fetch_available_models(api_key)
@@ -347,8 +370,8 @@ class GeminiClient:
             if answer:
                 self.history.append(("user", question))
                 self.history.append(("model", answer))
-                if len(self.history) > 6:
-                    self.history = self.history[-6:]
+                if len(self.history) > 30:
+                    self.history = self.history[-30:]
                 return answer
 
         if self._is_aptitude_question(question):
@@ -459,16 +482,7 @@ class GeminiClient:
         )
 
         # Build conversation history for context
-        contents = []
-        for role, text in self.history:
-            contents.append({
-                "role": "user" if role == "user" else "model",
-                "parts": [{"text": text}]
-            })
-        contents.append({
-            "role": "user",
-            "parts": [{"text": f"Transcription: \"{question}\""}]
-        })
+        contents = self._get_sanitized_history_contents(f"Transcription: \"{question}\"")
 
         available_models = self._fetch_available_models(api_key)
         candidate_models = self._pick_candidate_models(DEFAULT_PREFERRED_MODELS, available_models)
@@ -483,8 +497,8 @@ class GeminiClient:
                 if answer:
                     self.history.append(("user", question))
                     self.history.append(("model", answer))
-                    if len(self.history) > 6:
-                        self.history = self.history[-6:]
+                    if len(self.history) > 30:
+                        self.history = self.history[-30:]
                     return answer.strip()
             except Exception as e:
                 last_err = str(e)
