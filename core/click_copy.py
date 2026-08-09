@@ -1,14 +1,53 @@
 import time
+import ctypes
+from ctypes import wintypes
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 import uiautomation as auto
 from pynput import mouse
 
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+kernel32.GlobalAlloc.restype = ctypes.c_void_p
+kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+kernel32.GlobalLock.restype = ctypes.c_void_p
+kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+user32.OpenClipboard.argtypes = [wintypes.HWND]
+user32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
+
+def set_windows_clipboard(text: str) -> bool:
+    """Sets text directly into the OS Windows System Clipboard (Thread-safe across all threads)."""
+    if not text:
+        return False
+    try:
+        user32.OpenClipboard(None)
+        user32.EmptyClipboard()
+        text_bytes = text.encode('utf-16-le') + b'\x00\x00'
+        h_mem = kernel32.GlobalAlloc(0x0042, len(text_bytes)) # GHND
+        if not h_mem:
+            user32.CloseClipboard()
+            return False
+        p_mem = kernel32.GlobalLock(h_mem)
+        if p_mem:
+            ctypes.memmove(p_mem, text_bytes, len(text_bytes))
+            kernel32.GlobalUnlock(h_mem)
+            user32.SetClipboardData(13, h_mem) # CF_UNICODETEXT = 13
+        user32.CloseClipboard()
+        return True
+    except Exception as e:
+        try:
+            user32.CloseClipboard()
+        except Exception:
+            pass
+        return False
+
 class GlobalClickCopyWorker(QThread):
     """
     Background worker thread that listens for global mouse left-clicks on any outside application
     or webpage. When active, it extracts the article/paragraph text under the clicked point
-    and copies it to the Windows Clipboard.
+    and copies it directly to the Windows System Clipboard.
     """
     text_copied = pyqtSignal(str)
 
@@ -51,7 +90,7 @@ class GlobalClickCopyWorker(QThread):
                     if txt:
                         return txt
                 doc_txt = txt_pat.DocumentRange.GetText(-1).strip()
-                if doc_txt and len(doc_txt) < 5000:
+                if doc_txt and len(doc_txt) < 10000:
                     return doc_txt
         except Exception:
             pass
@@ -89,10 +128,14 @@ class GlobalClickCopyWorker(QThread):
 
         # 5. Parent container fallback for webpage article/paragraph nodes
         try:
-            parent = control.GetParentControl()
-            if parent and parent.ControlTypeName in ["GroupControl", "TextControl", "EditControl", "DocumentControl"]:
-                if parent.Name and len(parent.Name.strip()) > len(control.Name or ""):
+            curr = control
+            for _ in range(3):
+                parent = curr.GetParentControl()
+                if not parent:
+                    break
+                if parent.Name and len(parent.Name.strip()) > 3:
                     return parent.Name.strip()
+                curr = parent
         except Exception:
             pass
 
@@ -116,10 +159,9 @@ class GlobalClickCopyWorker(QThread):
 
                 text = self.extract_element_text(ctrl)
                 if text and len(text) >= 2:
-                    cb = QApplication.clipboard()
-                    if cb:
-                        cb.setText(text)
-                        self.text_copied.emit(text)
+                    # Set native OS system clipboard directly from background thread
+                    set_windows_clipboard(text)
+                    self.text_copied.emit(text)
             except Exception:
                 pass
 

@@ -585,6 +585,10 @@ class GhostOverlay(QWidget):
 
     def on_text_copied(self, copied_text: str):
         """Displays a brief status notification when text is clicked & copied from any webpage or box to clipboard."""
+        if copied_text:
+            cb = QtWidgets.QApplication.clipboard()
+            if cb:
+                cb.setText(copied_text)
         preview = copied_text[:28] + "..." if len(copied_text) > 28 else copied_text
         self.set_status(f"📋 Copied: \"{preview}\"", "#00ffcc")
         QTimer.singleShot(2500, lambda: self.set_status(
