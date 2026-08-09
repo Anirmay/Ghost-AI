@@ -220,40 +220,7 @@ class ElegantSizeGrip(QSizeGrip):
         painter.drawLine(w - 4,  h - 2, w - 2, h - 4)
 
 
-class ClickToCopyTextBrowser(QTextBrowser):
-    """
-    Custom QTextBrowser that automatically copies text to the clipboard when click_to_copy_enabled is True.
-    - Drag selection: Copies the highlighted text snippet.
-    - Single click: Copies the WHOLE answer box text so it can be pasted anywhere cleanly.
-    """
-    copied_signal = pyqtSignal(str)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.click_to_copy_enabled = False
-
-    def mouseReleaseEvent(self, event):
-        super().mouseReleaseEvent(event)
-        if not getattr(self, "click_to_copy_enabled", False):
-            return
-
-        if event.button() == Qt.MouseButton.LeftButton:
-            cursor = self.textCursor()
-            copied_text = ""
-            
-            if cursor.hasSelection():
-                copied_text = cursor.selectedText().strip()
-            else:
-                # Copy the WHOLE answer box plain text
-                full_text = self.toPlainText().strip()
-                if full_text:
-                    copied_text = full_text
-
-            if copied_text:
-                cb = QtWidgets.QApplication.clipboard()
-                if cb:
-                    cb.setText(copied_text)
-                    self.copied_signal.emit(copied_text)
 
 
 class GhostOverlay(QWidget):
@@ -385,10 +352,9 @@ class GhostOverlay(QWidget):
         container_layout.addWidget(self.divider)
         
         # 3. Output Text Display
-        self.text_browser = ClickToCopyTextBrowser(self)
+        self.text_browser = QTextBrowser(self)
         self.text_browser.setObjectName("text_browser")
         self.text_browser.setOpenExternalLinks(True)
-        self.text_browser.copied_signal.connect(self.on_text_copied)
         self.text_browser.setHtml(
             "<div style='color: #888899; text-align: center; margin-top: 50px;'>"
             "🚀 <b>GhostAI Stealthed Copilot</b><br><br>"
@@ -600,8 +566,6 @@ class GhostOverlay(QWidget):
         """Toggles the global background click-to-copy feature on or off."""
         self.config["click_copy"] = active
         save_config(self.config)
-        if hasattr(self, "text_browser"):
-            self.text_browser.click_to_copy_enabled = active
 
         if active:
             if not getattr(self, "global_copy_worker", None):
