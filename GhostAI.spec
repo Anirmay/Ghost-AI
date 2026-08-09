@@ -36,6 +36,9 @@ hidden_imports = [
     'uiautomation',
     'pynput',
     'comtypes',
+    'PIL',
+    'PIL.Image',
+    'core.snipper',
 ]
 
 # Exclude every large package that GhostAI does NOT need

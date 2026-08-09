@@ -385,6 +385,66 @@ class GeminiClient:
 
         return f"❌ **Error querying Gemini API!**\n\nDetails: {last_err}\n\n*Please verify your API key or internet connection.*"
 
+    def ask_image(self, image_bytes: bytes, prompt_text: str = "") -> str:
+        """
+        Processes a captured screen region snippet image (code, math formula, diagram, or text)
+        with Gemini Multimodal Vision API and returns a concise, direct solution/answer.
+        """
+        import io
+        import PIL.Image
+
+        config = load_config()
+        api_key = config.get("api_key", "").strip()
+        if not api_key:
+            return (
+                "⚠️ **Gemini API Key Missing!**\n\n"
+                "Please click the **Settings** button (gear icon) on the tray or overlay "
+                "and paste your free Gemini API Key from Google AI Studio."
+            )
+
+        try:
+            pil_img = PIL.Image.open(io.BytesIO(image_bytes))
+        except Exception as e:
+            return f"❌ **Error opening image snippet:** {e}"
+
+        memory_content = load_memory()
+        system_instruction = (
+            "You are GhostAI, an ultra-fast multimodal Vision & OCR Assistant.\n"
+            "You are provided with a cropped screenshot snippet of a user's screen (diagram, math problem, code snippet, or text).\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. Analyze the image carefully. Solve any math problems, explain the diagram, or transcribe/explain code.\n"
+            "2. Provide ONLY the direct, concise final answer/solution. DO NOT output internal thoughts, reasoning steps, or filler.\n"
+            "3. Format code elegantly in markdown code blocks with the correct language.\n\n"
+            "Below is the user's private local knowledge base:\n"
+            "--------------------------------------------------\n"
+            f"{memory_content}\n"
+            "--------------------------------------------------\n"
+        )
+
+        user_prompt = prompt_text if prompt_text.strip() else "Analyze this image snippet and provide the direct, concise final answer or solution."
+
+        available_models = self._fetch_available_models(api_key)
+        candidate_models = self._pick_candidate_models(DEFAULT_PREFERRED_MODELS, available_models)
+
+        genai.configure(api_key=api_key)
+        last_err = ""
+        for model_name in candidate_models:
+            try:
+                model = genai.GenerativeModel(model_name, system_instruction=system_instruction)
+                response = model.generate_content([pil_img, user_prompt], generation_config={"temperature": 0.2})
+                answer = self._extract_response_text(response)
+                if answer:
+                    self.history.append(("user", f"[Screen Snippet Image] {user_prompt}"))
+                    self.history.append(("model", answer))
+                    if len(self.history) > 30:
+                        self.history = self.history[-30:]
+                    return answer
+            except Exception as e:
+                last_err = f"Model {model_name} failed: {e}"
+                continue
+
+        return f"❌ **Error processing image snippet!**\n\nDetails: {last_err}"
+
     def ask_autopilot(self, snippet: str) -> str:
         """
         Specialized Meeting Copilot evaluator.

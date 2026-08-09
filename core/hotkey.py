@@ -28,6 +28,7 @@ class HotkeyWorker(QtCore.QThread):
     """
     mic_triggered = QtCore.pyqtSignal()
     stealth_triggered = QtCore.pyqtSignal()
+    snip_triggered = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -41,18 +42,21 @@ class HotkeyWorker(QtCore.QThread):
         self._is_running = True
         
         # Register hotkeys on this thread context (HWND = NULL)
-        # IDs: 1 = Ctrl+Shift+S (0x53), 2 = Ctrl+Shift+C (0x43)
+        # IDs: 1 = Ctrl+Shift+S (0x53), 2 = Ctrl+Shift+C (0x43), 3 = Ctrl+Shift+X (0x58)
         # Modifiers: MOD_CONTROL (0x0002) | MOD_SHIFT (0x0004) = 0x0006
         res1 = user32.RegisterHotKey(None, 1, 0x0002 | 0x0004, 0x53)
         res2 = user32.RegisterHotKey(None, 2, 0x0002 | 0x0004, 0x43)
+        res3 = user32.RegisterHotKey(None, 3, 0x0002 | 0x0004, 0x58)
         
         print(f"[+] Native Hotkey Thread started.")
         print(f"[+] Thread registered Ctrl+Shift+S: {res1}")
         print(f"[+] Thread registered Ctrl+Shift+C: {res2}")
+        print(f"[+] Thread registered Ctrl+Shift+X (Snip): {res3}")
         
         import time
         last_mic_time = 0.0
         last_stealth_time = 0.0
+        last_snip_time = 0.0
         debounce_interval = 0.8  # 800ms debounce window
         
         msg = wintypes.MSG()
@@ -70,6 +74,10 @@ class HotkeyWorker(QtCore.QThread):
                         if current_time - last_stealth_time > debounce_interval:
                             last_stealth_time = current_time
                             self.stealth_triggered.emit()
+                    elif hotkey_id == 3:
+                        if current_time - last_snip_time > debounce_interval:
+                            last_snip_time = current_time
+                            self.snip_triggered.emit()
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
             else:
@@ -78,4 +86,5 @@ class HotkeyWorker(QtCore.QThread):
         # Unregister hotkeys thread-safely before thread exits
         user32.UnregisterHotKey(None, 1)
         user32.UnregisterHotKey(None, 2)
+        user32.UnregisterHotKey(None, 3)
         print("[+] Native Hotkey Thread stopped.")

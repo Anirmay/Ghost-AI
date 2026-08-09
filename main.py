@@ -29,6 +29,21 @@ class AIWorker(QThread):
         self.finished.emit(answer)
 
 
+class AIImageWorker(QThread):
+    """Background worker to request multimodal vision content from Gemini for image snippets."""
+    finished = pyqtSignal(str)
+
+    def __init__(self, client: GeminiClient, image_bytes: bytes, prompt: str = ""):
+        super().__init__()
+        self.client = client
+        self.image_bytes = image_bytes
+        self.prompt = prompt
+
+    def run(self):
+        answer = self.client.ask_image(self.image_bytes, self.prompt)
+        self.finished.emit(answer)
+
+
 class AutoPilotAIWorker(QThread):
     """Background worker to request content from Gemini in Auto-Pilot mode."""
     finished = pyqtSignal(str)
@@ -78,19 +93,26 @@ class GhostApp(QObject):
         self.overlay = GhostOverlay()
         self.settings_dialog = SettingsDialog(self.overlay)
         
-        # Connect settings updates back to the overlay
+        # Initialize screen region snipper overlay
+        from core.snipper import ScreenSnipperOverlay
+        self.snipper_overlay = ScreenSnipperOverlay()
+        self.snipper_overlay.snippet_captured.connect(self.on_snippet_captured)
+
+        # Connect settings & overlay signals
         self.settings_dialog.config_updated.connect(self.on_config_updated)
         self.overlay.settings_requested.connect(self.show_settings)
         self.overlay.clear_requested.connect(self.clear_assistant)
         self.overlay.mic_clicked.connect(self.toggle_voice_capture)
         self.overlay.autopilot_clicked.connect(self.toggle_autopilot)
         self.overlay.interview_clicked.connect(self.toggle_interview_mode)
+        self.overlay.snip_clicked.connect(self.trigger_screen_snip)
         self.overlay.text_submitted.connect(self.on_text_submitted)
 
         # 2. Setup background native global hotkey thread worker
         self.hotkey_worker = HotkeyWorker()
         self.hotkey_worker.mic_triggered.connect(self.toggle_voice_capture)
         self.hotkey_worker.stealth_triggered.connect(self.overlay.toggle_click_through)
+        self.hotkey_worker.snip_triggered.connect(self.trigger_screen_snip)
         self.hotkey_worker.start()
 
         # 2. Setup background worker threads
@@ -423,8 +445,22 @@ class GhostApp(QObject):
     def on_ai_answered(self, answer):
         self.overlay.set_status("Completed", "#00ffcc")
         self.overlay.add_chat_message("ai", answer)
-        
-        # Automatically speak/alert if needed, currently visual focus only
+
+    def trigger_screen_snip(self):
+        """Launches the interactive screen region snipper canvas."""
+        self.overlay.set_status("📸 Drag rectangle to snip screen area...", "#00ffcc")
+        self.snipper_overlay.start_snipping()
+
+    def on_snippet_captured(self, img_bytes: bytes):
+        """Triggered when a screen region snippet selection is completed."""
+        if not img_bytes:
+            return
+
+        self.overlay.add_chat_message("user", "📸 *[Screen Snippet Captured]*")
+        self.overlay.set_status("Analyzing Image Snippet...", "#00ffcc")
+        self.image_ai_worker = AIImageWorker(self.ai_client, img_bytes)
+        self.image_ai_worker.finished.connect(self.on_ai_answered)
+        self.image_ai_worker.start()
 
     def clear_assistant(self):
         """Wipes current overlay text and rolling history."""

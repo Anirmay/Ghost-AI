@@ -233,6 +233,7 @@ class GhostOverlay(QWidget):
     mic_clicked = pyqtSignal()
     autopilot_clicked = pyqtSignal()
     interview_clicked = pyqtSignal()
+    snip_clicked = pyqtSignal()
     text_submitted = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -290,6 +291,14 @@ class GhostOverlay(QWidget):
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
         
+        # 📸 Screen Snipper Button
+        self.snip_btn = QPushButton("📸", self)
+        self.snip_btn.setFixedSize(24, 24)
+        self.snip_btn.setCursor(QtGui.QCursor(Qt.CursorShape.ArrowCursor))
+        self.snip_btn.setObjectName("snip_btn")
+        self.snip_btn.clicked.connect(self.snip_clicked.emit)
+        header_layout.addWidget(self.snip_btn)
+
         # 🎤 Interview Mode Button
         self.interview_btn = QPushButton("🎤", self)
         self.interview_btn.setFixedSize(24, 24)
