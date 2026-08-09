@@ -219,6 +219,39 @@ class ElegantSizeGrip(QSizeGrip):
         painter.drawLine(w - 4,  h - 2, w - 2, h - 4)
 
 
+class ClickToCopyTextBrowser(QTextBrowser):
+    """
+    Custom QTextBrowser that automatically copies clicked or highlighted text to the clipboard.
+    - Single click: Copies the line/paragraph/block under the cursor.
+    - Drag selection: Copies the highlighted text snippet.
+    """
+    copied_signal = pyqtSignal(str)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton:
+            cursor = self.textCursor()
+            copied_text = ""
+            
+            if cursor.hasSelection():
+                copied_text = cursor.selectedText().strip()
+            else:
+                # Select the text block/line under mouse click position
+                click_cursor = self.cursorForPosition(event.pos())
+                block_text = click_cursor.block().text().strip()
+                if block_text:
+                    copied_text = block_text
+                else:
+                    click_cursor.select(QtGui.QTextCursor.SelectionType.WordUnderCursor)
+                    copied_text = click_cursor.selectedText().strip()
+
+            if copied_text:
+                cb = QtWidgets.QApplication.clipboard()
+                if cb:
+                    cb.setText(copied_text)
+                    self.copied_signal.emit(copied_text)
+
+
 class GhostOverlay(QWidget):
     """
     Main Floating Desktop Overlay. Incorporates frameless controls,
@@ -338,9 +371,10 @@ class GhostOverlay(QWidget):
         container_layout.addWidget(self.divider)
         
         # 3. Output Text Display
-        self.text_browser = QTextBrowser(self)
+        self.text_browser = ClickToCopyTextBrowser(self)
         self.text_browser.setObjectName("text_browser")
         self.text_browser.setOpenExternalLinks(True)
+        self.text_browser.copied_signal.connect(self.on_text_copied)
         self.text_browser.setHtml(
             "<div style='color: #888899; text-align: center; margin-top: 50px;'>"
             "🚀 <b>GhostAI Stealthed Copilot</b><br><br>"
@@ -534,6 +568,15 @@ class GhostOverlay(QWidget):
         """Displays status message below the display browser."""
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color: {color_hex}; font-family: 'Consolas', monospace; font-size: 11px;")
+
+    def on_text_copied(self, copied_text: str):
+        """Displays a brief status notification when text is clicked & copied to clipboard."""
+        preview = copied_text[:28] + "..." if len(copied_text) > 28 else copied_text
+        self.set_status(f"📋 Copied: \"{preview}\"", "#00ffcc")
+        QTimer.singleShot(2500, lambda: self.set_status(
+            "STEALTH: Interactive" if not self.config.get("click_through", False) else "STEALTH: Click-through ACTIVE", 
+            "#00ffcc"
+        ))
 
     def set_click_through(self, active: bool):
         """Toggles the window click-through state (WA_TransparentForMouseEvents)."""
