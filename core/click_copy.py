@@ -36,7 +36,7 @@ def set_windows_clipboard(text: str) -> bool:
             user32.SetClipboardData(13, h_mem) # CF_UNICODETEXT = 13
         user32.CloseClipboard()
         return True
-    except Exception as e:
+    except Exception:
         try:
             user32.CloseClipboard()
         except Exception:
@@ -51,9 +51,10 @@ class GlobalClickCopyWorker(QThread):
     """
     text_copied = pyqtSignal(str)
 
-    def __init__(self, overlay_hwnd=None):
+    def __init__(self, overlay_hwnd=None, is_inside_callback=None):
         super().__init__()
         self.overlay_hwnd = overlay_hwnd
+        self.is_inside_callback = is_inside_callback
         self.running = False
         self.listener = None
 
@@ -147,12 +148,17 @@ class GlobalClickCopyWorker(QThread):
 
         if pressed and button == mouse.Button.left:
             try:
-                # Check control under cursor
+                # 1. Check if click is inside GhostAI window bounds
+                if self.is_inside_callback and callable(self.is_inside_callback):
+                    if self.is_inside_callback(x, y):
+                        return  # Clicked inside GhostAI -> DO NOTHING!
+
+                # 2. Check control under cursor
                 ctrl = auto.ControlFromPoint(x, y)
                 if not ctrl:
                     return
 
-                # Ignore clicks inside GhostAI window itself
+                # Ignore clicks inside GhostAI window native HWND
                 if self.overlay_hwnd and hasattr(ctrl, "NativeWindowHandle"):
                     if ctrl.NativeWindowHandle == self.overlay_hwnd:
                         return

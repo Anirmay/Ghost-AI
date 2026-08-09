@@ -562,6 +562,13 @@ class GhostOverlay(QWidget):
             "#00ffcc"
         ))
 
+    def is_point_inside(self, x: int, y: int) -> bool:
+        """Returns True if global screen point (x, y) falls inside the GhostOverlay window bounds."""
+        g_pos = self.mapToGlobal(QPoint(0, 0))
+        w = self.width()
+        h = self.height()
+        return (g_pos.x() <= x <= g_pos.x() + w and g_pos.y() <= y <= g_pos.y() + h)
+
     def set_click_copy(self, active: bool):
         """Toggles the global background click-to-copy feature on or off."""
         self.config["click_copy"] = active
@@ -570,7 +577,10 @@ class GhostOverlay(QWidget):
         if active:
             if not getattr(self, "global_copy_worker", None):
                 hwnd = int(self.winId()) if self.winId() else None
-                self.global_copy_worker = GlobalClickCopyWorker(overlay_hwnd=hwnd)
+                self.global_copy_worker = GlobalClickCopyWorker(
+                    overlay_hwnd=hwnd, 
+                    is_inside_callback=self.is_point_inside
+                )
                 self.global_copy_worker.text_copied.connect(self.on_text_copied)
             self.global_copy_worker.start_listening()
 
