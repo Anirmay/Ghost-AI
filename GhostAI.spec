@@ -3,11 +3,14 @@
 
 block_cipher = None
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_all
 
 datas = []
 datas += collect_data_files('speech_recognition')
 datas += collect_data_files('soundcard')
+
+pil_datas, pil_binaries, pil_hiddenimports = collect_all('PIL')
+datas += pil_datas
 
 hidden_imports = [
     'sounddevice',
@@ -39,7 +42,7 @@ hidden_imports = [
     'PIL',
     'PIL.Image',
     'core.snipper',
-]
+] + pil_hiddenimports
 
 # Exclude every large package that GhostAI does NOT need
 big_excludes = [
@@ -47,7 +50,6 @@ big_excludes = [
     'sklearn', 'scikit_learn', 'scipy',
     'cv2', 'opencv',
     'pandas', 'matplotlib',
-    'PIL', 'Pillow',
     'IPython', 'jupyter', 'notebook',
     'numba', 'llvmlite',
     'sympy',

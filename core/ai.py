@@ -1,3 +1,6 @@
+import io
+import PIL
+import PIL.Image
 import google.generativeai as genai
 from core.config import load_config, load_memory, append_to_memory
 
